@@ -5,3 +5,4 @@ load_dotenv()
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 LOG_CHANNEL = int(os.getenv('LOG_CHANNEL'))
+LEVEL_CHANNEL = int(os.getenv('LEVEL_CHANNEL'))
