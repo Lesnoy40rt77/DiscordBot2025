@@ -52,7 +52,7 @@ class AuditLog(commands.Cog):
         account_creation = member.created_at.strftime("%d/%m/%Y %H:%M:%S")
 
         embed = discord.Embed(title="🟢 Member Joined", color=discord.Color.green())
-        embed.set_thumbnail(url=user.display_avatar.url)
+        embed.set_thumbnail(url=member.display_avatar.url)
         embed.add_field(name="User", value=f"{member} ({member.id})", inline=False)
         embed.add_field(name="Account created", value=account_creation, inline=True)
         embed.timestamp = member.joined_at
@@ -145,7 +145,7 @@ class AuditLog(commands.Cog):
             if entry.target.id == member.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
                 # If audit log has recent kick -> member was kicked
                 embed = discord.Embed(title="⛔ Member Kicked", color=discord.Color.red())
-                embed.set_thumbnail(url=user.display_avatar.url)
+                embed.set_thumbnail(url=member.display_avatar.url)
                 embed.add_field(name="User", value=f"{member} ({member.id})", inline=False)
                 embed.add_field(name="Account Created", value=account_creation, inline=True)
                 embed.add_field(name="Moderator", value=f"{entry.user} ({entry.user.id})", inline=False)
