@@ -21,7 +21,7 @@ class AuditLog(commands.Cog):
 
         embed = discord.Embed(title="✏️ Message Edited", color=discord.Color.blue())
         message_link = f"https://discord.com/channels/{before.guild.id}/{before.channel.id}/{before.id}"
-        embed.add_field(name="Author", value=f"{before.author} ({before.author.id})", inline=False)
+        embed.add_field(name="Author", value=f"{before.author} (<@!{before.author.id}>)", inline=False)
         embed.add_field(name="Channel", value=f"{before.channel} ({before.channel.id})", inline=False)
         embed.add_field(name="Link", value=f"[Go to message]({message_link})", inline=False)
         embed.add_field(name="Original message", value=before.content[:1024])
@@ -38,7 +38,7 @@ class AuditLog(commands.Cog):
             return
 
         embed = discord.Embed(title="🗑️ Message Deleted", color=discord.Color.red())
-        embed.add_field(name="Author", value=f"{message.author} ({message.author.id})", inline=False)
+        embed.add_field(name="Author", value=f"{message.author} (<@!{message.author.id}>)", inline=False)
         embed.add_field(name="Channel", value=f"{message.channel} ({message.channel.id})", inline=False)
         embed.add_field(name="Contents", value=message.content[:1024] if message.content else "*No text*", inline=False)
         embed.add_field(name="ID", value=message.id, inline=True)
@@ -53,7 +53,7 @@ class AuditLog(commands.Cog):
 
         embed = discord.Embed(title="🟢 Member Joined", color=discord.Color.green())
         embed.set_thumbnail(url=member.display_avatar.url)
-        embed.add_field(name="User", value=f"{member} ({member.id})", inline=False)
+        embed.add_field(name="User", value=f"{member} (<@!{member.id}>)", inline=False)
         embed.add_field(name="Account created", value=account_creation, inline=True)
         embed.timestamp = member.joined_at
 
@@ -72,9 +72,9 @@ class AuditLog(commands.Cog):
 
         embed = discord.Embed(title="⛔ Member banned", color=discord.Color.red())
         embed.set_thumbnail(url=user.display_avatar.url)
-        embed.add_field(name="User", value=f"{user} ({user.id})", inline=False)
+        embed.add_field(name="User", value=f"{user} (<@!{user.id}>)", inline=False)
         embed.add_field(name="Reason", value=reason, inline=False)
-        embed.add_field(name="🔧 Banned by", value=f"{moderator} ({moderator.id})" if isinstance(moderator, discord.User) else moderator, inline=False)
+        embed.add_field(name="🔧 Banned by", value=f"{moderator} (<@!{moderator.id}>)" if isinstance(moderator, discord.User) else moderator, inline=False)
         embed.timestamp = discord.utils.utcnow()
 
         await self.log_event(embed)
@@ -91,35 +91,34 @@ class AuditLog(commands.Cog):
 
         embed = discord.Embed(title="✅ Member unbanned", color=discord.Color.green())
         embed.set_thumbnail(url=user.display_avatar.url)
-        embed.add_field(name="User", value=f"{user} ({user.id})", inline=False)
-        embed.add_field(name="🔧 Unbanned by:", value=f"{moderator} ({moderator.id})" if isinstance(moderator, discord.User) else moderator, inline=False)
+        embed.add_field(name="User", value=f"{user} (<@!{user.id}>)", inline=False)
+        embed.add_field(name="🔧 Unbanned by:", value=f"{moderator} (<@!{moderator.id}>)" if isinstance(moderator, discord.User) else moderator, inline=False)
         embed.timestamp = discord.utils.utcnow()
 
         await self.log_event(embed)
 
     @commands.Cog.listener()
-    async def on_member_update(self, before, after):
-        """Logs timeout given/revoked to member"""
-        if before.timed_out_until != after.timed_out_until:
-            guild = after.guild
+    async def on_audit_log_entry_create(self, entry: discord.AuditLogEntry):
+        """Logs timeouts given/revoked"""
+        if entry.action == discord.AuditLogAction.member_update:
+            member = entry.target
+            moderator = entry.user
 
-            async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
-                if entry.target.id == after.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
-                    moderator = entry.user
-                    break
-            else:
-                moderator = "Unknown"
-
-            if after.timed_out_until:
-                timeout_until = discord.utils.format_dt(after.timed_out_until, style="F")  # Formatting the date until
-                embed = discord.Embed(title="🔇 Member timeouted", color=discord.Color.orange())
+            # If new timeout set
+            if entry.changes.after.timed_out_until:
+                timeout_until = discord.utils.format_dt(entry.changes.after.timed_out_until, style="F")
+                embed = discord.Embed(title="🔇 Member timed out", color=discord.Color.orange())
                 embed.add_field(name="Until", value=timeout_until, inline=False)
-            else:
+
+            # Check if timeout is lifted (deletion `timed_out_until`)
+            elif entry.changes.before.timed_out_until and not entry.changes.after.timed_out_until:
                 embed = discord.Embed(title="🔊 Timeout lifted", color=discord.Color.green())
 
-            embed.set_thumbnail(url=after.display_avatar.url)
-            embed.add_field(name="User", value=f"{after} ({after.id})", inline=False)
-            embed.add_field(name="🔧 Moderator", value=f"{moderator} ({moderator.id})" if isinstance(moderator, discord.User) else moderator, inline=False)
+            else:
+                return  # If not timeout -> ignore
+
+            embed.add_field(name="User", value=f"{member} (<@!{member.id}>)", inline=False)
+            embed.add_field(name="🔧 Moderator", value=f"{moderator} (<@!{moderator.id}>)", inline=False)
             embed.timestamp = discord.utils.utcnow()
 
             await self.log_event(embed)
@@ -146,9 +145,9 @@ class AuditLog(commands.Cog):
                 # If audit log has recent kick -> member was kicked
                 embed = discord.Embed(title="⛔ Member Kicked", color=discord.Color.red())
                 embed.set_thumbnail(url=member.display_avatar.url)
-                embed.add_field(name="User", value=f"{member} ({member.id})", inline=False)
+                embed.add_field(name="User", value=f"{member} (<@!{member.id}>)", inline=False)
                 embed.add_field(name="Account Created", value=account_creation, inline=True)
-                embed.add_field(name="Moderator", value=f"{entry.user} ({entry.user.id})", inline=False)
+                embed.add_field(name="Moderator", value=f"{entry.user} (<@!{entry.user.id}>)", inline=False)
                 embed.add_field(name="Reason", value=entry.reason if entry.reason else "No reason", inline=False)
                 embed.add_field(name="Time on the server", value=f"{duration_str} ({joined_str})", inline=False)
                 embed.timestamp = entry.created_at
@@ -158,7 +157,7 @@ class AuditLog(commands.Cog):
         # No recent kicks found -> User left
         embed = discord.Embed(title="🚪 User left", color=discord.Color.dark_gray())
         embed.set_thumbnail(url=user.display_avatar.url)
-        embed.add_field(name="User", value=f"{member} ({member.id})", inline=False)
+        embed.add_field(name="User", value=f"{member} (<@!{member.id}>)", inline=False)
         embed.add_field(name="Time on the server", value=f"{duration_str} ({joined_str})", inline=False)
         await self.log_event(embed)
 
@@ -182,7 +181,7 @@ class AuditLog(commands.Cog):
         embed = discord.Embed(title="📢 Channel created", color=discord.Color.green())
         embed.add_field(name="Name", value=f"{channel.name} ({channel.id})", inline=False)
         embed.add_field(name="Type", value=channel_type, inline=True)
-        embed.add_field(name="Creator", value=f"{creator} ({creator.id})" if isinstance(creator, discord.User) else creator, inline=True)
+        embed.add_field(name="Creator", value=f"{creator} (<@!{creator.id}>)" if isinstance(creator, discord.User) else creator, inline=True)
         embed.timestamp = discord.utils.utcnow()
 
         await self.log_event(embed)
@@ -207,13 +206,13 @@ class AuditLog(commands.Cog):
         embed = discord.Embed(title="🚫 Channel deleted", color=discord.Color.red())
         embed.add_field(name="Name", value=f"{channel.name} ({channel.id})", inline=False)
         embed.add_field(name="Type", value=channel_type, inline=True)
-        embed.add_field(name="Deleter", value=f"{deleter} ({deleter.id})" if isinstance(deleter, discord.User) else deleter, inline=True)
+        embed.add_field(name="Deleter", value=f"{deleter} (<@!{deleter.id}>)" if isinstance(deleter, discord.User) else deleter, inline=True)
         embed.timestamp = discord.utils.utcnow()
 
         await self.log_event(embed)
 
     @commands.Cog.listener()
-    async def on_member_roles_update(self, before, after):
+    async def on_member_update(self, before, after):
         """Logs roles update"""
         guild = before.guild
         added_roles = [role for role in after.roles if role not in before.roles]
@@ -231,7 +230,7 @@ class AuditLog(commands.Cog):
             moderator = "Unknown"
 
         embed = discord.Embed(title="🎭 Roles updated", color=discord.Color.blue())
-        embed.add_field(name="User", value=f"{after} ({after.id})", inline=False)
+        embed.add_field(name="User", value=f"{after} (<@!{after.id}>)", inline=False)
 
         if added_roles:
             embed.add_field(name="✅ Added roles", value=", ".join([role.mention for role in added_roles]),
@@ -241,7 +240,7 @@ class AuditLog(commands.Cog):
             embed.add_field(name="❌ Deleted roles", value=", ".join([role.mention for role in removed_roles]),
                             inline=False)
 
-        embed.add_field(name="🔧 Changed by", value=f"{moderator} ({moderator.id})" if isinstance(moderator, discord.User) else moderator, inline=False)
+        embed.add_field(name="🔧 Changed by", value=f"{moderator} (<@!{moderator.id}>)" if isinstance(moderator, discord.User) else moderator, inline=False)
         embed.timestamp = discord.utils.utcnow()
 
         await self.log_event(embed)
@@ -275,7 +274,7 @@ class AuditLog(commands.Cog):
         if removed_perms:
             embed.add_field(name="❌ Revoked permissions", value=", ".join(removed_perms), inline=False)
 
-        embed.add_field(name="🔧 Changed by", value=f"{moderator} ({moderator.id})" if isinstance(moderator, discord.User) else moderator, inline=False)
+        embed.add_field(name="🔧 Changed by", value=f"{moderator} (<@!{moderator.id}>)" if isinstance(moderator, discord.User) else moderator, inline=False)
         embed.timestamp = discord.utils.utcnow()
 
         await self.log_event(embed)
@@ -304,10 +303,8 @@ class AuditLog(commands.Cog):
             if target in before.overwrites:
                 before_overwrite = before.overwrites[target]
 
-                added_perms = [perm for perm, value in overwrite if
-                               value is True and before_overwrite.get(perm) is not True]
-                removed_perms = [perm for perm, value in before_overwrite if
-                                 value is True and overwrite.get(perm) is not True]
+                added_perms = [perm for perm, value in overwrite if value is True and getattr(before_overwrite, perm) is not True]
+                removed_perms = [perm for perm, value in before_overwrite if value is True and getattr(overwrite, perm) is not True]
 
                 if added_perms or removed_perms:
                     embed.add_field(name=f"🔹 Changes for {target.name}", value="\n".join([
@@ -315,7 +312,7 @@ class AuditLog(commands.Cog):
                         f"❌ **Revoked**: {', '.join(removed_perms)}" if removed_perms else "",
                     ]), inline=False)
 
-        embed.add_field(name="🔧 Changed by", value=f"{moderator} ({moderator.id})" if isinstance(moderator, discord.User) else moderator, inline=False)
+        embed.add_field(name="🔧 Changed by", value=f"{moderator} (<@!{moderator.id}>)" if isinstance(moderator, discord.User) else moderator, inline=False)
         embed.timestamp = discord.utils.utcnow()
 
         await self.log_event(embed)
